@@ -4,7 +4,7 @@
 #include <cassert>
 #include "stringSorter.h"
 
-//const char TEST_INPUT_FILE_PATH[] = "/home/ilya/CLionProjects/String-sorter/data/test-file.txt";
+const char TEST_INPUT_FILE_PATH[] = "/home/ilya/CLionProjects/String-sorter/data/test-file.txt";
 const char INPUT_FILE_PATH[] = "/home/ilya/CLionProjects/String-sorter/data/origin.txt";
 const char OUTPUT_FILE_PATH[] = "/home/ilya/CLionProjects/String-sorter/data/sorted-file.txt";
 
@@ -21,14 +21,14 @@ int main() {
     printf("Program sorts rawData in provided file and prints them to output one.\n\n");
 
     char *rawData;
-    unsigned int szFile = readDataFromFile(INPUT_FILE_PATH, rawData);
+    unsigned int szFile = readDataFromFile(TEST_INPUT_FILE_PATH, rawData);
 
     int nStrings = replaceChars('\n', '\0', rawData) + 1; // +1 due to the beginning of the file
 
-    char *strings = (char*) calloc(nStrings, sizeof(char));
+    char **strings = (char**) calloc(nStrings, sizeof(char));
     initStringPtrs(rawData, strings, nStrings, szFile);
 
-    qsort(strings, nStrings, sizeof(strings[0]), cmpStrings);
+    //qsort(strings, nStrings, sizeof(strings[0]), cmpStrings);
 
     printStringsToFile(OUTPUT_FILE_PATH, strings, nStrings);
 
@@ -85,17 +85,19 @@ int replaceChars(char fromChar, char toChar, char* &string) {
     return nStrings;
 }
 
-void initStringPtrs(const char *rawData, char *&strings, int nStrings, int szFile) {
+void initStringPtrs(char *rawData, char **&strings, int nStrings, int szFile) {
     int nInits = 0;
-    for (int i = 0; i < szFile; ++i) {//до \0!!!
-        if (rawData[i] == '\0' || i == 0) {
-            strings[nInits++] = rawData[i];
+
+    strings[nInits++] = &rawData[0];
+    for (int i = 1; i < szFile - 1; ++i) {
+        if (rawData[i] == '\0') {
+            strings[nInits++] = &rawData[i + 1];
         }
     }
     assert(nInits == nStrings);
 }
 
-void printStringsToFile(const char filePath[], char *strings, int nStrings) {
+void printStringsToFile(const char filePath[], char **strings, int nStrings) {
     FILE *outFile = fopen(filePath, "w");
     if (!outFile) {
         printf("File wasn't opened. Provided path: %s\n", filePath);
