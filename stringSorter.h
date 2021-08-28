@@ -1,0 +1,8 @@
+//
+// Created by ilya on 28.08.2021.
+//
+
+#ifndef STRING_SORTER_STRINGSORTER_H
+#define STRING_SORTER_STRINGSORTER_H
+
+#endif //STRING_SORTER_STRINGSORTER_H
