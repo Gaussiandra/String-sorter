@@ -15,8 +15,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int szFile = getFileSize(inpFilePath);
-    if (szFile) {
+    FILE *inpFile = fopen(inpFilePath, "r");
+    if (!inpFile) {
+        printf("File wasn't opened. Provided path: %s\n", inpFilePath);
+        return 1;
+    }
+
+    int szFile = getFileSize(inpFile);
+    if (szFile == -1) {
         return 1;
     }
 
@@ -27,14 +33,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (readDataFromFile(inpFilePath, rawData, szFile)) {
+    if (readDataFromFile(inpFile, rawData, szFile)) {
         return 1;
     }
+    fclose(inpFile);
 
     // +1 due to the string at the beginning of the file
     int nStrings = replaceChars('\n', '\0', rawData) + 1;
 
-    char **strings = (char**) calloc(nStrings, sizeof(char*));
+    const char **strings = (const char**) calloc(nStrings, sizeof(const char*));
 
     // szFile + 1 is correct because of alloc(szFile + 1)
     int nInitStrings = initStringPtrs(rawData, strings, szFile + 1);
@@ -42,10 +49,18 @@ int main(int argc, char *argv[]) {
 
     qsort(strings, nStrings, sizeof(strings[0]), cmpStrings);
 
-    printStringsToFile(outFilePath, strings, nStrings);
+    FILE *outFile = fopen(outFilePath, "w");
+    if (!outFile) {
+        printf("File wasn't opened. Provided path: %s\n", outFilePath);
+        return -1;
+    }
+    printStringsToFile(outFile, strings, nStrings);
+    fclose(outFile);
 
     free(strings);
+    strings = nullptr;
     free(rawData);
+    rawData = nullptr;
 
     return 0;
 }
@@ -86,29 +101,21 @@ int handleCommandLineArgs(int argc, char *argv[], char **inpFilePath, char **out
  * @param filePath - path to file
  * @return size in bytes or -1 if error was found.
  */
-int getFileSize(const char filePath[]) {
-    FILE *inpFile = fopen(filePath, "r");
-    if (!inpFile) {
-        printf("File wasn't opened. Provided path: %s\n", filePath);
-        return -1;
-    }
-
+int getFileSize(FILE *inpFile) {
     fseek(inpFile, 0, SEEK_END);
     int szFile = (int)ftell(inpFile);
 
-    fclose(inpFile);
     return szFile;
 }
 
 /**
  * Reads all data from the provided file to given pointer assuming memory has been already allocated.
- * @param filePath - path to file to read from
+ * @param inpFIle - path to file to read from
  * @param rawData - pointer to allocated memory
  * @param szFile - size of allocated memory
  * @return 0 if data was read successfully, -1 in other cases.
  */
-int readDataFromFile(const char filePath[], char *rawData, int szFile) {
-    FILE *inpFile = fopen(filePath, "r");
+int readDataFromFile(FILE *inpFile, char *rawData, int szFile) {
     assert(inpFile);
     assert(rawData);
 
@@ -118,7 +125,6 @@ int readDataFromFile(const char filePath[], char *rawData, int szFile) {
         return -1;
     }
 
-    fclose(inpFile);
     return 0;
 }
 
@@ -153,16 +159,16 @@ int replaceChars(char fromChar, char toChar, char string[]) {
  * @param szFile - size of allocated data
  * @return number of initialized strings.
  */
-int initStringPtrs(const char *rawData, char *strings[], unsigned int szFile) {
+int initStringPtrs(const char *rawData, const char *strings[], unsigned int szFile) {
     assert(rawData);
     assert(strings);
 
     int nInits = 0;
 
-    strings[nInits++] = (char *) &rawData[0];
+    strings[nInits++] = rawData;
     for (int i = 1; i < szFile - 1; ++i) {
         if (rawData[i] == '\0') {
-            strings[nInits++] = (char *) &rawData[i + 1];
+            strings[nInits++] = rawData + i + 1;
         }
     }
 
@@ -178,25 +184,19 @@ int cmpStrings(const void *str1, const void *str2)  {
 
 /**
  * Prints strings to file
- * @param filePath - path to output file
+ * @param outFile - path to output file
  * @param strings - array of char*(pointers to strings)
  * @param nStrings - number of strings
  * @return 0 if data was printed successfully, -1 if other cases.
  */
-int printStringsToFile(const char filePath[], char *strings[], int nStrings) {
+int printStringsToFile(FILE *outFile, const char *strings[], int nStrings) {
+    assert(outFile);
     assert(strings);
-
-    FILE *outFile = fopen(filePath, "w");
-    if (!outFile) {
-        printf("File wasn't opened. Provided path: %s\n", filePath);
-        return -1;
-    }
 
     for (int i = 0; i < nStrings - 1; ++i) {
         fprintf(outFile, "%s\n", strings[i]);
     }
     fprintf(outFile, "%s", strings[nStrings - 1]);
 
-    fclose(outFile);
     return 0;
 }
