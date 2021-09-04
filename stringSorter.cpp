@@ -10,8 +10,8 @@ int main(int argc, char *argv[]) {
     printf("Program sorts strings in the provided file and prints them to the output one.\n\n");
 
     char *inpFilePath = nullptr, *outFilePath = (char*)DEFAULT_OUTPUT_FILE_PATH;
-    int returnStatus = handleCommandLineArgs(argc, argv, &inpFilePath, &outFilePath);
-    if (returnStatus) {
+    int errorCode = handleCommandLineArgs(argc, argv, &inpFilePath, &outFilePath);
+    if (errorCode) {
         return 1;
     }
 
@@ -20,16 +20,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char *rawData = nullptr;
     // +1 due to possible absence \n at the end of the file.
-    rawData = (char*) calloc(szFile + 1, sizeof(char));
-    if (!*rawData) {
+    char *rawData = (char*) calloc(szFile + 1, sizeof(char));
+    if (!rawData) {
         printf("Memory wasn't allocated.\n");
         return 1;
     }
 
-
-    if (readDataFromFile(inpFilePath, &rawData, szFile)) {
+    if (readDataFromFile(inpFilePath, rawData, szFile)) {
         return 1;
     }
 
@@ -39,7 +37,8 @@ int main(int argc, char *argv[]) {
     char **strings = (char**) calloc(nStrings, sizeof(char*));
 
     // szFile + 1 is correct because of alloc(szFile + 1)
-    initStringPtrs(rawData, strings, nStrings, szFile + 1);
+    int nInitStrings = initStringPtrs(rawData, strings, szFile + 1);
+    assert(nInitStrings == nStrings);
 
     qsort(strings, nStrings, sizeof(strings[0]), cmpStrings);
 
@@ -108,12 +107,12 @@ int getFileSize(const char filePath[]) {
  * @param szFile - size of allocated memory
  * @return 0 if data was read successfully, -1 in other cases.
  */
-int readDataFromFile(const char filePath[], char **rawData, int szFile) {
+int readDataFromFile(const char filePath[], char *rawData, int szFile) {
     FILE *inpFile = fopen(filePath, "r");
     assert(inpFile);
     assert(rawData);
 
-    unsigned int readingResult = fread(*rawData, sizeof(char), szFile, inpFile);
+    size_t readingResult = fread(rawData, sizeof(char), szFile, inpFile);
     if (readingResult != szFile) {
         printf("Data from file wasn't read.\n");
         return -1;
@@ -152,22 +151,27 @@ int replaceChars(char fromChar, char toChar, char string[]) {
  * @param strings - pointer to allocated array of string pointers
  * @param nStrings - number of strings to be sure data was initialized correctly
  * @param szFile - size of allocated data
+ * @return number of initialized strings.
  */
-void initStringPtrs(const char *rawData, char *strings[], int nStrings, unsigned int szFile) {
+int initStringPtrs(const char *rawData, char *strings[], unsigned int szFile) {
     assert(rawData);
     assert(strings);
 
     int nInits = 0;
 
-    strings[nInits++] = (char*)&rawData[0];
+    strings[nInits++] = (char *) &rawData[0];
     for (int i = 1; i < szFile - 1; ++i) {
         if (rawData[i] == '\0') {
-            strings[nInits++] = (char*)&rawData[i + 1];
+            strings[nInits++] = (char *) &rawData[i + 1];
         }
     }
-    assert(nInits == nStrings);
+
+    return nInits;
 }
 
+/**
+ * Comparator for qsort function.
+ */
 int cmpStrings(const void *str1, const void *str2)  {
     return strcmp(*(const char **)str1, *(const char **)str2);
 }
