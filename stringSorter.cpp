@@ -102,8 +102,10 @@ int handleCommandLineArgs(int argc, char *argv[], char **inpFilePath, char **out
  * @return size in bytes or -1 if error was found.
  */
 int getFileSize(FILE *inpFile) {
+    rewind(inpFile);
     fseek(inpFile, 0, SEEK_END);
     int szFile = (int)ftell(inpFile);
+    rewind(inpFile);
 
     return szFile;
 }
@@ -118,6 +120,7 @@ int getFileSize(FILE *inpFile) {
 int readDataFromFile(FILE *inpFile, char *rawData, int szFile) {
     assert(inpFile);
     assert(rawData);
+    rewind(inpFile);
 
     size_t readingResult = fread(rawData, sizeof(char), szFile, inpFile);
     if (readingResult != szFile) {
@@ -125,6 +128,7 @@ int readDataFromFile(FILE *inpFile, char *rawData, int szFile) {
         return -1;
     }
 
+    rewind(inpFile);
     return 0;
 }
 
