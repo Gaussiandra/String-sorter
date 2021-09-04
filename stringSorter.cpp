@@ -7,10 +7,8 @@
 const char DEFAULT_OUTPUT_FILE_PATH[] = "./sorted-file.txt";
 
 /*
-* consts? &? int / unsigned int
- * readmi
+* consts? \n
  * doxygen
- * исправления из первого задания
 */
 
 int main(int argc, char *argv[]) {
@@ -22,9 +20,21 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char *rawData;
-    int szFile = readDataFromFile(inpFilePath, &rawData);
-    if (szFile == -1) {
+    int szFile = getFileSize(inpFilePath);
+    if (szFile) {
+        return 1;
+    }
+
+    char *rawData = nullptr;
+    // +1 due to possible absence \n at the end of the file.
+    rawData = (char*) calloc(szFile + 1, sizeof(char));
+    if (!*rawData) {
+        printf("Memory wasn't allocated.\n");
+        return 1;
+    }
+
+
+    if (readDataFromFile(inpFilePath, &rawData, szFile)) {
         return 1;
     }
 
@@ -32,7 +42,9 @@ int main(int argc, char *argv[]) {
     int nStrings = replaceChars('\n', '\0', rawData) + 1;
 
     char **strings = (char**) calloc(nStrings, sizeof(char*));
-    initStringPtrs(rawData, strings, nStrings, szFile);
+
+    // szFile + 1 is correct because of alloc(szFile + 1)
+    initStringPtrs(rawData, strings, nStrings, szFile + 1);
 
     qsort(strings, nStrings, sizeof(strings[0]), cmpStrings);
 
@@ -44,7 +56,16 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+/**
+ * Handles command line arguments.
+ * @param argc, @param argv main() args
+ * @param inpFilePath, @param outFilePath - paths to files
+ * @return 0 if arguments were handled successfully, 1 in other cases.
+ */
 int handleCommandLineArgs(int argc, char *argv[], char **inpFilePath, char **outFilePath) {
+    assert(inpFilePath);
+    assert(outFilePath);
+
     switch(argc) {
         case 1: {
             printf("Input file name was not entered.");
@@ -66,6 +87,11 @@ int handleCommandLineArgs(int argc, char *argv[], char **inpFilePath, char **out
     }
 }
 
+/**
+ * Gets size of the provided file in bytes.
+ * @param filePath - path to file
+ * @return size in bytes or -1 if error was found.
+ */
 int getFileSize(const char filePath[]) {
     FILE *inpFile = fopen(filePath, "r");
     if (!inpFile) {
@@ -80,36 +106,38 @@ int getFileSize(const char filePath[]) {
     return szFile;
 }
 
-int readDataFromFile(const char filePath[], char **rawData) {
+/**
+ * Reads all data from the provided file to given pointer assuming memory has been already allocated.
+ * @param filePath - path to file to read from
+ * @param rawData - pointer to allocated memory
+ * @param szFile - size of allocated memory
+ * @return 0 if data was read successfully, -1 in other cases.
+ */
+int readDataFromFile(const char filePath[], char **rawData, int szFile) {
     FILE *inpFile = fopen(filePath, "r");
     assert(inpFile);
-
-    int fileSizeReturnValue = getFileSize(filePath);
-    if (fileSizeReturnValue == -1) {
-        return -1;
-    }
-    // +1 due to possible absence \n at the end of the file.
-    int szFile = fileSizeReturnValue + 1;
-    *rawData = (char*) calloc(szFile, sizeof(char));
-    if (!*rawData) {
-        printf("Memory wasn't allocated.\n");
-        return -1;
-    }
+    assert(rawData);
 
     unsigned int readingResult = fread(*rawData, sizeof(char), szFile, inpFile);
-    printf("%d %d", readingResult, szFile);
     if (readingResult != szFile) {
         printf("Data from file wasn't read.\n");
         return -1;
     }
 
     fclose(inpFile);
-
-    return szFile;
+    return 0;
 }
 
-int replaceChars(char fromChar, char toChar, char *string) {
+/**
+ * Replaces chars in the provided string.
+ * @param fromChar - char which will be replaced assuming it is not \0
+ * @param toChar  - char to replace with
+ * @param string - pointer to string which will be changed
+ * @return number of changed symbols.
+ */
+int replaceChars(char fromChar, char toChar, char string[]) {
     assert(fromChar != '\0');
+    assert(string);
 
     int i = 0, nStrings = 0;
     while (string[i] != '\0') {
@@ -123,13 +151,23 @@ int replaceChars(char fromChar, char toChar, char *string) {
     return nStrings;
 }
 
-void initStringPtrs(char *rawData, char **strings, int nStrings, unsigned int szFile) { // const rawData
+/**
+ * Initializes pointers assuming strings was divided by \0.
+ * @param rawData - pointer to data with all strings
+ * @param strings - pointer to allocated array of string pointers
+ * @param nStrings - number of strings to be sure data was initialized correctly
+ * @param szFile - size of allocated data
+ */
+void initStringPtrs(const char *rawData, char *strings[], int nStrings, unsigned int szFile) {
+    assert(rawData);
+    assert(strings);
+
     int nInits = 0;
 
-    strings[nInits++] = &rawData[0];
-    for (int i = 1; i < szFile; ++i) {
+    strings[nInits++] = (char*)&rawData[0];
+    for (int i = 1; i < szFile - 1; ++i) {
         if (rawData[i] == '\0') {
-            strings[nInits++] = &rawData[i + 1]; // i + 1 is correct because of alloc(szFile + 1)
+            strings[nInits++] = (char*)&rawData[i + 1];
         }
     }
     assert(nInits == nStrings);
@@ -139,16 +177,26 @@ int cmpStrings(const void *str1, const void *str2)  {
     return strcmp(*(const char **)str1, *(const char **)str2);
 }
 
-int printStringsToFile(const char filePath[], char **strings, int nStrings) {
+/**
+ * Prints strings to file
+ * @param filePath - path to output file
+ * @param strings - array of char*(pointers to strings)
+ * @param nStrings - number of strings
+ * @return 0 if data was printed successfully, -1 if other cases.
+ */
+int printStringsToFile(const char filePath[], char *strings[], int nStrings) {
+    assert(strings);
+
     FILE *outFile = fopen(filePath, "w");
     if (!outFile) {
         printf("File wasn't opened. Provided path: %s\n", filePath);
         return -1;
     }
 
-    for (int i = 0; i < nStrings; ++i) {
+    for (int i = 0; i < nStrings - 1; ++i) {
         fprintf(outFile, "%s\n", strings[i]);
     }
+    fprintf(outFile, "%s", strings[nStrings - 1]);
 
     fclose(outFile);
     return 0;
