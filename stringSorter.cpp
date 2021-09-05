@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int szFile = getFileSize(inpFile);
+    size_t szFile = getFileSize(inpFile);
     if (szFile == -1) {
         return 1;
     }
@@ -101,10 +101,10 @@ int handleCommandLineArgs(int argc, char *argv[], char **inpFilePath, char **out
  * @param filePath - path to file
  * @return size in bytes or -1 if error was found.
  */
-int getFileSize(FILE *inpFile) {
+size_t getFileSize(FILE *inpFile) {
     rewind(inpFile);
     fseek(inpFile, 0, SEEK_END);
-    int szFile = (int)ftell(inpFile);
+    size_t szFile = ftell(inpFile);
     rewind(inpFile);
 
     return szFile;
@@ -117,10 +117,9 @@ int getFileSize(FILE *inpFile) {
  * @param szFile - size of allocated memory
  * @return 0 if data was read successfully, -1 in other cases.
  */
-int readDataFromFile(FILE *inpFile, char *rawData, int szFile) {
+int readDataFromFile(FILE *inpFile, char *rawData, size_t szFile) {
     assert(inpFile);
     assert(rawData);
-    rewind(inpFile);
 
     size_t readingResult = fread(rawData, sizeof(char), szFile, inpFile);
     if (readingResult != szFile) {
@@ -163,7 +162,7 @@ int replaceChars(char fromChar, char toChar, char string[]) {
  * @param szFile - size of allocated data
  * @return number of initialized strings.
  */
-int initStringPtrs(const char *rawData, const char *strings[], unsigned int szFile) {
+int initStringPtrs(const char *rawData, const char *strings[], size_t szFile) {
     assert(rawData);
     assert(strings);
 
