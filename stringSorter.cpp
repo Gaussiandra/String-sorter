@@ -6,9 +6,6 @@
 
 const char DEFAULT_OUTPUT_FILE_PATH[] = "./sorted-file.txt";
 
-// норм парсинг
-// комментарии менторов
-
 int main(int argc, char *argv[]) {
     printf("Program sorts strings in the provided file and prints them to the output one.\n\n");
 
