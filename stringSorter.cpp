@@ -181,13 +181,13 @@ int replaceChars(char fromChar, char toChar, char string[]) {
  * @param szFile - size of allocated data
  * @return number of initialized strings.
  */
-int initStringPtrs(const char *rawData, stringData strings[], size_t szFile) { // почему тут в strings можно присваивание сделать...
+int initStringPtrs(const char *rawData, stringData strings[], size_t szFile) {
     assert(rawData);
     assert(strings);
 
     int nInits = 0;
 
-    strings[nInits++].str = (char*) rawData; // он создаст копию и её присвоит или всё равно даст указатель на константу
+    strings[nInits++].str = (char*) rawData;
     for (int i = 1; i < szFile - 1; ++i) {
         if (rawData[i] == '\0') {
             strings[nInits].str = (char*) rawData + i + 1;
@@ -200,10 +200,16 @@ int initStringPtrs(const char *rawData, stringData strings[], size_t szFile) { /
     return nInits;
 }
 
+/**
+ * Left-side tring comparator.
+ */
 int cmpStringsLeft(const void *str1, const void *str2)  {
     return strcmp(((stringData*) str1)->str, ((stringData*) str2)->str);
 }
 
+/**
+ * Left-side reverse string comparator.
+ */
 int cmpStringsLeftReverse(const void *str1, const void *str2) {
     return -cmpStringsLeft(str1, str2);
 }
@@ -245,6 +251,9 @@ int strcmpReverseOrder(const char *str1, int length1, const char *str2, int leng
     return 0;
 }
 
+/**
+ * Right-side string comparator.
+ */
 int cmpStringsRight(const void *str1, const void *str2)  {
     return strcmpReverseOrder(((stringData *) str1)->str,
                               ((stringData *) str1)->length,
@@ -252,6 +261,9 @@ int cmpStringsRight(const void *str1, const void *str2)  {
                               ((stringData *) str2)->length);
 }
 
+/**
+ * Right-side reverse string comparator.
+ */
 int cmpStringsRightReverse(const void *str1, const void *str2) {
     return -cmpStringsRight(str1, str2);
 }
