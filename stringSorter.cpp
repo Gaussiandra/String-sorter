@@ -4,13 +4,11 @@
 #include <cassert>
 #include "stringSorter.hpp"
 
-const char DEFAULT_OUTPUT_FILE_PATH[] = "./sorted-file.txt";
-
-int main(int argc, char *argv[]) {
+int main(int argc, const char *argv[]) {
     printf("Program sorts strings in the provided file and prints them to the output one.\n\n");
 
-    char *inpFilePath = nullptr, *outFilePath = (char*)DEFAULT_OUTPUT_FILE_PATH;
-    SORT_FLAGS order = UNKNOWN, side = UNKNOWN;
+    const char *inpFilePath = nullptr, *outFilePath = nullptr;
+    SORT_FLAGS order = ASCENDING_ORDER, side = RIGHT_SIDE;
     int errorCode = handleCommandLineArgs(argc, argv, &side, &order, &inpFilePath, &outFilePath);
     if (errorCode) {
         return 1;
@@ -22,10 +20,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    size_t szFile = getFileSize(inpFile);
-    if (szFile == -1) {
+    long signedSzFile = getFileSize(inpFile);
+    if (signedSzFile == -1) {
         return 1;
     }
+    size_t szFile = (size_t) signedSzFile; //убрать эту гадость
 
     // +1 due to possible absence \n at the end of the file.
     char *rawData = (char*) calloc(szFile + 1, sizeof(char));
@@ -40,7 +39,7 @@ int main(int argc, char *argv[]) {
     fclose(inpFile);
 
     // +1 due to the string at the beginning of the file
-    int nStrings = replaceChars('\n', '\0', rawData) + 1;
+    size_t nStrings = replaceChars('\n', '\0', rawData) + 1;
     stringData *strings = (stringData*) calloc(nStrings, sizeof(stringData));
 
     // szFile + 1 is correct because of alloc(szFile + 1)
@@ -49,9 +48,9 @@ int main(int argc, char *argv[]) {
 
     int (*qsortCmp)(const void*, const void*) = nullptr;
     if      (order == ASCENDING_ORDER  && side == LEFT_SIDE)  qsortCmp = cmpStringsLeft;
-    else if (order == ASCENDING_ORDER  && side == RIGHT_SIZE) qsortCmp = cmpStringsRight;
+    else if (order == ASCENDING_ORDER  && side == RIGHT_SIDE) qsortCmp = cmpStringsRight;
     else if (order == DESCENDING_ORDER && side == LEFT_SIDE)  qsortCmp = cmpStringsLeftReverse;
-    else if (order == DESCENDING_ORDER && side == RIGHT_SIZE) qsortCmp = cmpStringsRightReverse;
+    else if (order == DESCENDING_ORDER && side == RIGHT_SIDE) qsortCmp = cmpStringsRightReverse;
     assert(qsortCmp);
     qsort(strings, nStrings, sizeof(strings[0]), qsortCmp);
 
@@ -63,12 +62,41 @@ int main(int argc, char *argv[]) {
     printStringsToFile(outFile, strings, nStrings);
     fclose(outFile);
 
-    free((void *) strings);
+    free(strings);
     strings = nullptr;
     free(rawData);
     rawData = nullptr;
 
     return 0;
+}
+
+/**
+ * Parse command line arguments.
+ * @param argc, @param argv - main() args
+ * @param key - flag to find in command line
+ * @param useNextArg - whether to return argument(if it exists) after key
+ * @return index in argv of found key(or next argument) or -1 if error has occurred.
+ */
+int parseCommandLineArgs(int argc, const char *argv[], const char *key, bool useNextArg) {
+    assert(argv);
+    assert(key);
+
+    for (int i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], key)) {
+            if (useNextArg) {
+                if (i == argc - 1) {
+                    printf("Argument after %s was expected.\n", key);
+                    return -1;
+                }
+                else {
+                    return i + 1;
+                }
+            }
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 /**
@@ -78,41 +106,64 @@ int main(int argc, char *argv[]) {
  * @param inpFilePath, @param outFilePath - paths to files
  * @return 0 if arguments were handled successfully, 1 in other cases.
  */
-int handleCommandLineArgs(int argc, char *argv[], SORT_FLAGS *side, SORT_FLAGS *order, char **inpFilePath,
-                          char **outFilePath) {
+int handleCommandLineArgs(int argc, const char *argv[], SORT_FLAGS *side, SORT_FLAGS *order, const char **inpFilePath,
+                          const char **outFilePath) {
     assert(inpFilePath);
     assert(outFilePath);
 
-    if (argc == 5) {
-        if (*argv[1] == *(char*)"left") {
+    int sideArgPosition = parseCommandLineArgs( argc, argv, "--side",  true);
+    int orderArgPosition = parseCommandLineArgs(argc, argv, "--order", true);
+    int inArgPosition = parseCommandLineArgs(   argc, argv, "--in",    true);
+    int outArgPosition = parseCommandLineArgs(  argc, argv, "--out",   true);
+    int helpArgPosition = parseCommandLineArgs( argc, argv, "--help",  false);
+
+    if (sideArgPosition != -1) {
+        if (!strcmp(argv[sideArgPosition], "left")) {
             *side = LEFT_SIDE;
         }
-        else if (*argv[1] == *(char*)"right") {
-            *side = RIGHT_SIZE;
+        else if (!strcmp(argv[sideArgPosition], "right")) {
+            *side = RIGHT_SIDE;
         }
         else {
-            printf("Incorrect sorting side was entered. left/right is available.");
+            printf("Incorrect sorting side was entered. left/right is available.\n");
             return 1;
         }
+    }
 
-        if (*argv[2] == *(char*)"ascent") {
+    if (orderArgPosition != -1) {
+        if (!strcmp(argv[orderArgPosition], "ascent")) {
             *order = ASCENDING_ORDER;
         }
-        else if (*argv[2] == *(char*)"descent") {
+        else if (!strcmp(argv[orderArgPosition], "descent")) {
             *order = DESCENDING_ORDER;
         }
         else {
-            printf("Incorrect sorting order was entered. ascent/descent is available.");
+            printf("Incorrect sorting order was entered. ascent/descent is available.\n");
             return 1;
         }
-
-        *inpFilePath = argv[3];
-        *outFilePath = argv[4];
-        return 0;
     }
 
-    printf("Number of arguments is incorrect. Usage: ./String_sorter left/right ascent/descent input_file output_file.");
-    return 1;
+    if (helpArgPosition != -1) {
+        printf("Usage: ./String_sorter [--side left/right] [--order ascent/descent] --in input_file --out output_file.\n");
+    }
+
+    if (inArgPosition != -1) {
+        *inpFilePath = argv[inArgPosition];
+    }
+    else {
+        printf("Input file argument was not found.\n");
+        return 1;
+    }
+
+    if (outArgPosition != -1) {
+        *outFilePath = argv[outArgPosition];
+    }
+    else {
+        printf("Output file argument was not found.\n");
+        return 1;
+    }
+
+    return 0;
 }
 
 /**
@@ -120,10 +171,10 @@ int handleCommandLineArgs(int argc, char *argv[], SORT_FLAGS *side, SORT_FLAGS *
  * @param filePath - path to file
  * @return size in bytes or -1 if error was found.
  */
-size_t getFileSize(FILE *inpFile) {
+long getFileSize(FILE *inpFile) {
     rewind(inpFile);
     fseek(inpFile, 0, SEEK_END);
-    size_t szFile = ftell(inpFile);
+    long szFile = ftell(inpFile);
     rewind(inpFile);
 
     return szFile;
@@ -157,11 +208,12 @@ int readDataFromFile(FILE *inpFile, char *rawData, size_t szFile) {
  * @param string - pointer to string which will be changed
  * @return number of changed symbols.
  */
-int replaceChars(char fromChar, char toChar, char string[]) {
+size_t replaceChars(char fromChar, char toChar, char string[]) {
     assert(fromChar != '\0');
     assert(string);
 
-    int i = 0, nStrings = 0;
+    size_t nStrings = 0;
+    int i = 0;
     while (string[i] != '\0') {
         if (string[i] == fromChar) {
             string[i] = toChar;
@@ -181,21 +233,21 @@ int replaceChars(char fromChar, char toChar, char string[]) {
  * @param szFile - size of allocated data
  * @return number of initialized strings.
  */
-int initStringPtrs(const char *rawData, stringData strings[], size_t szFile) {
+int initStringPtrs(char *rawData, stringData strings[], size_t szFile) {
     assert(rawData);
     assert(strings);
 
     int nInits = 0;
 
-    strings[nInits++].str = (char*) rawData;
-    for (int i = 1; i < szFile - 1; ++i) {
+    strings[nInits++].str = rawData;
+    for (size_t i = 1; i < szFile - 1; ++i) {
         if (rawData[i] == '\0') {
-            strings[nInits].str = (char*) rawData + i + 1;
-            strings[nInits - 1].length = int(strings[nInits].str - strings[nInits - 1].str);
+            strings[nInits].str = rawData + i + 1;
+            strings[nInits - 1].length = size_t(strings[nInits].str - strings[nInits - 1].str);
             ++nInits;
         }
     }
-    strings[nInits - 1].length = int(rawData + szFile - strings[nInits-1].str);
+    strings[nInits - 1].length = size_t(rawData + szFile - strings[nInits-1].str);
 
     return nInits;
 }
@@ -204,7 +256,7 @@ int initStringPtrs(const char *rawData, stringData strings[], size_t szFile) {
  * Left-side tring comparator.
  */
 int cmpStringsLeft(const void *str1, const void *str2)  {
-    return strcmp(((stringData*) str1)->str, ((stringData*) str2)->str);
+    return strcmp(((const stringData*) str1)->str, ((const stringData*) str2)->str);
 }
 
 /**
@@ -220,17 +272,19 @@ int cmpStringsLeftReverse(const void *str1, const void *str2) {
  * @param length1, @param length2 - string lengths with \0
  * @return 1 if str1 > str2, 0 if str1 == str2, -1 if str1 < str2.
  */
-int strcmpReverseOrder(const char *str1, int length1, const char *str2, int length2) {
-    assert(str1);
-    assert(length1 >= 0);
-    assert(str2);
-    assert(length2 >= 0);
+int strcmpReverseOrder(const stringData *str1, const stringData *str2) {
+    assert(str1->str);
+    assert(str1->length >= 0);
+    assert(str2->str);
+    assert(str2->length >= 0);
 
-    int minLength = (length1 < length2) ? length1 : length2;
-
-    for (int i = 0; i <= minLength; ++i) {
-        const char symbol1 = *(str1 + length1 - i - 1),
-                   symbol2 = *(str2 + length2 - i - 1);
+    size_t minLength = (str1->length < str2->length) ? str1->length : str2->length;
+    size_t nChecks = 0;
+    char *curStr1ptr = str1->str + str1->length - 1,
+         *curStr2ptr = str2->str + str2->length - 1;
+    while (nChecks++ <= minLength) {
+        char symbol1 = *(curStr1ptr--);
+        char symbol2 = *(curStr2ptr--);
 
         if (symbol1 > symbol2) {
             return 1;
@@ -238,13 +292,12 @@ int strcmpReverseOrder(const char *str1, int length1, const char *str2, int leng
         if (symbol1 < symbol2) {
             return -1;
         }
-
     }
 
-    if (length1 > length2) {
+    if (str1->length > str2->length) {
         return 1;
     }
-    if (length2 < length1) {
+    if (str2->length < str1->length) {
         return -1;
     }
 
@@ -255,10 +308,7 @@ int strcmpReverseOrder(const char *str1, int length1, const char *str2, int leng
  * Right-side string comparator.
  */
 int cmpStringsRight(const void *str1, const void *str2)  {
-    return strcmpReverseOrder(((stringData *) str1)->str,
-                              ((stringData *) str1)->length,
-                              ((stringData *) str2)->str,
-                              ((stringData *) str2)->length);
+    return strcmpReverseOrder((const stringData*) str1, (const stringData*) str2);
 }
 
 /**
@@ -275,11 +325,11 @@ int cmpStringsRightReverse(const void *str1, const void *str2) {
  * @param nStrings - number of strings
  * @return 0 if data was printed successfully, -1 if other cases.
  */
-int printStringsToFile(FILE *outFile, const stringData strings[], int nStrings) {
+int printStringsToFile(FILE *outFile, const stringData strings[], size_t nStrings) {
     assert(outFile);
     assert(strings);
 
-    for (int i = 0; i < nStrings - 1; ++i) {
+    for (size_t i = 0; i < nStrings - 1; ++i) {
         fprintf(outFile, "%s\n", strings[i].str);
     }
     fprintf(outFile, "%s", strings[nStrings - 1].str);
