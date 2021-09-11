@@ -11,9 +11,10 @@ int main(int argc, const char *argv[]) {
     SORT_FLAGS order = ASCENDING_ORDER, side = RIGHT_SIDE;
     int errorCode = handleCommandLineArgs(argc, argv, &side, &order, &inpFilePath, &outFilePath);
     if (errorCode) {
-        return 1;
+        return 1; // error code . 1
     }
 
+    // ------
     FILE *inpFile = fopen(inpFilePath, "r");
     if (!inpFile) {
         printf("File wasn't opened. Provided path: %s\n", inpFilePath);
@@ -24,7 +25,7 @@ int main(int argc, const char *argv[]) {
     if (signedSzFile == -1) {
         return 1;
     }
-    size_t szFile = (size_t) signedSzFile; //убрать эту гадость
+    size_t szFile = (size_t) signedSzFile;
 
     // +1 due to possible absence \n at the end of the file.
     char *rawData = (char*) calloc(szFile + 1, sizeof(char));
@@ -45,7 +46,9 @@ int main(int argc, const char *argv[]) {
     // szFile + 1 is correct because of alloc(szFile + 1)
     int nInitStrings = initStringPtrs(rawData, strings, szFile + 1);
     assert(nInitStrings == nStrings);
+    // ----
 
+    // добавить во0мозность сортировки 3 файлов
     int (*qsortCmp)(const void*, const void*) = nullptr;
     if      (order == ASCENDING_ORDER  && side == LEFT_SIDE)  qsortCmp = cmpStringsLeft;
     else if (order == ASCENDING_ORDER  && side == RIGHT_SIDE) qsortCmp = cmpStringsRight;
@@ -69,6 +72,12 @@ int main(int argc, const char *argv[]) {
 
     return 0;
 }
+
+//: ./String_sorter --in ../data/test-file.txt --read --out output.txt \
+//                  --side right --order descent --sort --output \
+//                  --side left                  --sort --output \
+//                  --output_beffer                              \
+//                  --end
 
 /**
  * Parse command line arguments.
@@ -111,12 +120,13 @@ int handleCommandLineArgs(int argc, const char *argv[], SORT_FLAGS *side, SORT_F
     assert(inpFilePath);
     assert(outFilePath);
 
-    int sideArgPosition = parseCommandLineArgs( argc, argv, "--side",  true);
+    int sideArgPosition  = parseCommandLineArgs(argc, argv, "--side",  true);
     int orderArgPosition = parseCommandLineArgs(argc, argv, "--order", true);
-    int inArgPosition = parseCommandLineArgs(   argc, argv, "--in",    true);
-    int outArgPosition = parseCommandLineArgs(  argc, argv, "--out",   true);
-    int helpArgPosition = parseCommandLineArgs( argc, argv, "--help",  false);
+    int inArgPosition    = parseCommandLineArgs(argc, argv, "--in",    true);
+    int outArgPosition   = parseCommandLineArgs(argc, argv, "--out",   true);
+    int helpArgPosition  = parseCommandLineArgs(argc, argv, "--help",  false);
 
+    // optopt + можно написать прцоессор с обработкой - длинная опция, короткая, ссылка на обрабатывающую функцию
     if (sideArgPosition != -1) {
         if (!strcmp(argv[sideArgPosition], "left")) {
             *side = LEFT_SIDE;
@@ -172,7 +182,7 @@ int handleCommandLineArgs(int argc, const char *argv[], SORT_FLAGS *side, SORT_F
  * @return size in bytes or -1 if error was found.
  */
 long getFileSize(FILE *inpFile) {
-    rewind(inpFile);
+    rewind(inpFile); // !!!!!
     fseek(inpFile, 0, SEEK_END);
     long szFile = ftell(inpFile);
     rewind(inpFile);
@@ -191,11 +201,13 @@ int readDataFromFile(FILE *inpFile, char *rawData, size_t szFile) {
     assert(inpFile);
     assert(rawData);
 
-    size_t readingResult = fread(rawData, sizeof(char), szFile, inpFile);
-    if (readingResult != szFile) {
+    size_t readingResult = fread(rawData, sizeof(char), szFile, inpFile); //fread на windows /r вычищает сдвигами в текстовом файле
+    if (readingResult != szFile) { // readingResult - размер файла, на винде упадёт
         printf("Data from file wasn't read.\n");
         return -1;
     }
+    szFile = readingResult;//////// ifdef win unix
+    // \0 нужно ставить после readingResult
 
     rewind(inpFile);
     return 0;
@@ -265,6 +277,8 @@ int cmpStringsLeft(const void *str1, const void *str2)  {
 int cmpStringsLeftReverse(const void *str1, const void *str2) {
     return -cmpStringsLeft(str1, str2);
 }
+// последний элемент в массиве указателей сделать нулевым
+// не учитывать пунктцации
 
 /**
  * strcmp analog with comparing strings in reverse order.
