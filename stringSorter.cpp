@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
+#include <cwctype>
 #include "stringSorter.hpp"
 
 int main(int argc, const char *argv[]) {
@@ -11,19 +12,18 @@ int main(int argc, const char *argv[]) {
     SORT_FLAGS order = ASCENDING_ORDER, side = RIGHT_SIDE;
     int errorCode = handleCommandLineArgs(argc, argv, &side, &order, &inpFilePath, &outFilePath);
     if (errorCode) {
-        return 1; // error code . 1
+        return ARGUMENTS_HANDLING_ERROR;
     }
 
-    // ------
     FILE *inpFile = fopen(inpFilePath, "r");
     if (!inpFile) {
         printf("File wasn't opened. Provided path: %s\n", inpFilePath);
-        return 1;
+        return FILE_OPENING_ERROR;
     }
 
     long signedSzFile = getFileSize(inpFile);
     if (signedSzFile == -1) {
-        return 1;
+        return SIZE_GETTING_ERROR;
     }
     size_t szFile = (size_t) signedSzFile;
 
@@ -31,24 +31,21 @@ int main(int argc, const char *argv[]) {
     char *rawData = (char*) calloc(szFile + 1, sizeof(char));
     if (!rawData) {
         printf("Memory wasn't allocated.\n");
-        return 1;
+        return MEM_ALLOCATING_ERROR;
     }
 
-    if (readDataFromFile(inpFile, rawData, szFile)) {
-        return 1;
-    }
+    readDataFromFile(inpFile, rawData, &szFile);
     fclose(inpFile);
 
     // +1 due to the string at the beginning of the file
     size_t nStrings = replaceChars('\n', '\0', rawData) + 1;
-    stringData *strings = (stringData*) calloc(nStrings, sizeof(stringData));
+    // nStrings + 1 for nullptr at the end of array for security purposes
+    stringData *strings = (stringData*) calloc(nStrings + 1, sizeof(stringData));
 
     // szFile + 1 is correct because of alloc(szFile + 1)
     int nInitStrings = initStringPtrs(rawData, strings, szFile + 1);
     assert(nInitStrings == nStrings);
-    // ----
 
-    // добавить во0мозность сортировки 3 файлов
     int (*qsortCmp)(const void*, const void*) = nullptr;
     if      (order == ASCENDING_ORDER  && side == LEFT_SIDE)  qsortCmp = cmpStringsLeft;
     else if (order == ASCENDING_ORDER  && side == RIGHT_SIDE) qsortCmp = cmpStringsRight;
@@ -60,7 +57,7 @@ int main(int argc, const char *argv[]) {
     FILE *outFile = fopen(outFilePath, "w");
     if (!outFile) {
         printf("File wasn't opened. Provided path: %s\n", outFilePath);
-        return -1;
+        return FILE_OPENING_ERROR;
     }
     printStringsToFile(outFile, strings, nStrings);
     fclose(outFile);
@@ -72,12 +69,6 @@ int main(int argc, const char *argv[]) {
 
     return 0;
 }
-
-//: ./String_sorter --in ../data/test-file.txt --read --out output.txt \
-//                  --side right --order descent --sort --output \
-//                  --side left                  --sort --output \
-//                  --output_beffer                              \
-//                  --end
 
 /**
  * Parse command line arguments.
@@ -126,7 +117,6 @@ int handleCommandLineArgs(int argc, const char *argv[], SORT_FLAGS *side, SORT_F
     int outArgPosition   = parseCommandLineArgs(argc, argv, "--out",   true);
     int helpArgPosition  = parseCommandLineArgs(argc, argv, "--help",  false);
 
-    // optopt + можно написать прцоессор с обработкой - длинная опция, короткая, ссылка на обрабатывающую функцию
     if (sideArgPosition != -1) {
         if (!strcmp(argv[sideArgPosition], "left")) {
             *side = LEFT_SIDE;
@@ -182,7 +172,6 @@ int handleCommandLineArgs(int argc, const char *argv[], SORT_FLAGS *side, SORT_F
  * @return size in bytes or -1 if error was found.
  */
 long getFileSize(FILE *inpFile) {
-    rewind(inpFile); // !!!!!
     fseek(inpFile, 0, SEEK_END);
     long szFile = ftell(inpFile);
     rewind(inpFile);
@@ -197,20 +186,16 @@ long getFileSize(FILE *inpFile) {
  * @param szFile - size of allocated memory
  * @return 0 if data was read successfully, -1 in other cases.
  */
-int readDataFromFile(FILE *inpFile, char *rawData, size_t szFile) {
+void readDataFromFile(FILE *inpFile, char *rawData, size_t *szFile) {
     assert(inpFile);
     assert(rawData);
 
-    size_t readingResult = fread(rawData, sizeof(char), szFile, inpFile); //fread на windows /r вычищает сдвигами в текстовом файле
-    if (readingResult != szFile) { // readingResult - размер файла, на винде упадёт
-        printf("Data from file wasn't read.\n");
-        return -1;
-    }
-    szFile = readingResult;//////// ifdef win unix
-    // \0 нужно ставить после readingResult
+    // fread on Windows returns readingResult <= szFile due to deleting /r from stream
+    size_t readingResult = fread(rawData, sizeof(char), *szFile, inpFile);
+    *szFile = readingResult;
+    *(rawData + readingResult) = '\0';
 
     rewind(inpFile);
-    return 0;
 }
 
 /**
@@ -277,8 +262,44 @@ int cmpStringsLeft(const void *str1, const void *str2)  {
 int cmpStringsLeftReverse(const void *str1, const void *str2) {
     return -cmpStringsLeft(str1, str2);
 }
-// последний элемент в массиве указателей сделать нулевым
-// не учитывать пунктцации
+
+/**
+ * Gets index of first/last nonpunct symbol
+ * @param str - stringData struct
+ * @param reverseOrder - whether to check string in reverse order
+ * @return 0 if string == "\0", 0/last index if string is consists of only punct symbols.
+ */
+size_t getFirstNonPunctIndex(const stringData* str, bool reverseOrder) {
+    assert(str);
+    assert(str->str);
+    assert(str->length > 0);
+
+    if (str->length == 1) {
+        return 0;
+    }
+
+    if (reverseOrder) {
+        const char *curPos = str->str + str->length;
+        size_t nChecks = 1;
+        while (nChecks++ < str->length) {
+            if (!iswpunct((wint_t) *(curPos - nChecks))) {
+                return str->length - nChecks;
+            }
+        }
+        return str->length - 1;
+    }
+    else {
+        const char *curPos = str->str;
+        size_t nChecks = 0;
+        while (nChecks < str->length - 1) {
+            if (!iswpunct((wint_t) *(curPos + nChecks))) {
+                return nChecks;
+            }
+            ++nChecks;
+        }
+        return 0;
+    }
+}
 
 /**
  * strcmp analog with comparing strings in reverse order.
@@ -292,20 +313,18 @@ int strcmpReverseOrder(const stringData *str1, const stringData *str2) {
     assert(str2->str);
     assert(str2->length >= 0);
 
-    size_t minLength = (str1->length < str2->length) ? str1->length : str2->length;
+    size_t str1punctIdx = getFirstNonPunctIndex(str1, true),
+           str2punctIdx = getFirstNonPunctIndex(str2, true);
+    size_t minIndex = (str1punctIdx < str2punctIdx) ? str1punctIdx : str2punctIdx;
     size_t nChecks = 0;
-    char *curStr1ptr = str1->str + str1->length - 1,
-         *curStr2ptr = str2->str + str2->length - 1;
-    while (nChecks++ <= minLength) {
+    char *curStr1ptr = str1->str + str1punctIdx,
+         *curStr2ptr = str2->str + str2punctIdx;
+    while (nChecks++ <= minIndex) {
         char symbol1 = *(curStr1ptr--);
         char symbol2 = *(curStr2ptr--);
 
-        if (symbol1 > symbol2) {
-            return 1;
-        }
-        if (symbol1 < symbol2) {
-            return -1;
-        }
+        if (symbol1 > symbol2) return 1;
+        if (symbol1 < symbol2) return -1;
     }
 
     if (str1->length > str2->length) {

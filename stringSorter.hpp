@@ -3,6 +3,14 @@ struct stringData {
     size_t length = 0;
 };
 
+enum ERROR_CODES {
+    ARGUMENTS_HANDLING_ERROR = 1,
+    FILE_OPENING_ERROR,
+    SIZE_GETTING_ERROR,
+    MEM_ALLOCATING_ERROR,
+    FILE_READING_ERROR
+};
+
 enum SORT_FLAGS {
     UNKNOWN = 0,
     ASCENDING_ORDER,
@@ -15,11 +23,12 @@ int handleCommandLineArgs(int argc, const char *argv[], SORT_FLAGS *side, SORT_F
                           const char **outFilePath);
 int parseCommandLineArgs(int argc, const char *argv[], const char *key, bool useNextArg);
 long getFileSize(FILE *inpFile);
-int readDataFromFile(FILE *inpFile, char *rawData, size_t szFile);
+void readDataFromFile(FILE *inpFile, char *rawData, size_t *szFile);
 size_t replaceChars(char fromChar, char toChar, char string[]);
 int initStringPtrs(char *rawData, stringData strings[], size_t szFile);
 int cmpStringsLeft(const void *str1, const void *str2);
 int cmpStringsLeftReverse(const void *str1, const void *str2);
+size_t getFirstNonPunctIndex(const stringData* str, bool reverseOrder);
 int strcmpReverseOrder(const stringData *str1, const stringData *str2);
 int cmpStringsRight(const void *str1, const void *str2);
 int cmpStringsRightReverse(const void *str1, const void *str2);
